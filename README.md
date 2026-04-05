@@ -1,5 +1,7 @@
 # Planora
 
+![Planora header](Logos/readme-header.png)
+
 Offline-first personal travel planning app for Android.
 
 Plan your trips, organize your spots, and keep everything accessible — even without internet.
