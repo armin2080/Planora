@@ -108,10 +108,8 @@ class ExternalLocationLinkImportService {
       placeName,
     );
     final note = _buildTripadvisorNote(
-      sourceUrl: tripadvisorParsed.sourceUrl,
       category: tripadvisorParsed.category,
       cityHint: tripadvisorParsed.cityHint,
-      googleMapsUrl: googleMapsUrl,
       resolutionHint: resolutionHint,
     );
     final photoUrl = await _photoLookup.findPhotoUrl(
@@ -208,8 +206,6 @@ class ExternalLocationLinkImportService {
   }
 
   String _buildTripadvisorNote({
-    required String sourceUrl,
-    required String googleMapsUrl,
     String? category,
     String? cityHint,
     String? resolutionHint,
@@ -222,8 +218,6 @@ class ExternalLocationLinkImportService {
         'City hint: ${cityHint.trim()}',
       if (resolutionHint != null && resolutionHint.trim().isNotEmpty)
         'Location match: ${resolutionHint.trim()}',
-      'Source: $sourceUrl',
-      'Google Maps: $googleMapsUrl',
     ];
 
     return lines.join('\n');

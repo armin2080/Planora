@@ -467,22 +467,36 @@ class NotesSection extends StatelessWidget {
   final void Function(int noteId, String content) onEdit;
   final ValueChanged<int> onDelete;
 
-  /// Removes Google Maps and TripAdvisor links from note content for display.
-  /// Links are available as buttons elsewhere, so we hide them from note text.
   static String _stripLinksFromNote(String content) {
-    // Remove Google Maps and TripAdvisor links
-    String stripped = content.replaceAll(
-      RegExp(
-        r'https?://(?:maps\.google\.com|google\.com/maps|tripadvisor\.[a-z.]+).*?(?=\s|$)',
+    final lines = content.split('\n');
+    final visibleLines = <String>[];
+
+    for (final line in lines) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty) {
+        continue;
+      }
+
+      final lower = trimmed.toLowerCase();
+      final containsMapOrTripadvisorLink = RegExp(
+        r'https?://(?:maps\.google\.com|google\.com/maps|tripadvisor\.[a-z.]+)',
         caseSensitive: false,
-      ),
-      '',
-    );
-    
-    // Clean up extra whitespace
-    stripped = stripped.replaceAll(RegExp(r'\s+'), ' ').trim();
-    
-    return stripped;
+      ).hasMatch(trimmed);
+      final isImportedLinkLine = lower.startsWith('source:') ||
+          lower.startsWith('google maps:') ||
+          lower.startsWith('tripadvisor:') ||
+          lower.startsWith('trip advisor:') ||
+          lower.startsWith('tripadvisor link:') ||
+          lower.startsWith('maps:');
+
+      if (containsMapOrTripadvisorLink || isImportedLinkLine) {
+        continue;
+      }
+
+      visibleLines.add(trimmed);
+    }
+
+    return visibleLines.join('\n').trim();
   }
 
   @override
@@ -514,7 +528,9 @@ class NotesSection extends StatelessWidget {
               return Card(
                 margin: const EdgeInsets.only(bottom: 8),
                 child: ListTile(
-                  title: Text(displayContent.isEmpty ? '(empty note)' : displayContent),
+                  title: Text(
+                    displayContent.isEmpty ? '(empty note)' : displayContent,
+                  ),
                   subtitle: Text(dateFormat.format(note.createdAt)),
                   trailing: Wrap(
                     spacing: 4,
