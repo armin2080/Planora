@@ -7,7 +7,7 @@ class DatabaseService {
   static final DatabaseService instance = DatabaseService._();
 
   static const _databaseName = 'planora.db';
-  static const _databaseVersion = 7;
+  static const _databaseVersion = 9;
   Future<void> _createAttractionsTable(Database db) async {
     await db.execute('''
       CREATE TABLE attractions_suggestions (
@@ -19,6 +19,10 @@ class DatabaseService {
         lng REAL,
         type TEXT,
         rating TEXT,
+        score REAL,
+        image_url TEXT,
+        source_url TEXT,
+        category_key TEXT,
         url TEXT,
         FOREIGN KEY (trip_id) REFERENCES trips (id) ON DELETE CASCADE
       )
@@ -95,6 +99,14 @@ class DatabaseService {
       await _createAttractionsTable(db);
     }
 
+    if (oldVersion < 8) {
+      await _addAttractionMetadataColumns(db);
+    }
+
+    if (oldVersion < 9) {
+      await _addPlaceMetadataColumns(db);
+    }
+
     await _createIndexes(db);
   }
 
@@ -119,10 +131,29 @@ class DatabaseService {
         lat REAL NOT NULL,
         lng REAL NOT NULL,
         note TEXT,
+        google_maps_url TEXT,
+        tripadvisor_url TEXT,
+        category TEXT,
+        photo_url TEXT,
         created_at TEXT NOT NULL,
         FOREIGN KEY (trip_id) REFERENCES trips (id) ON DELETE CASCADE
       )
     ''');
+  }
+
+  Future<void> _addPlaceMetadataColumns(Database db) async {
+    await db.execute(
+      'ALTER TABLE places ADD COLUMN google_maps_url TEXT',
+    );
+    await db.execute(
+      'ALTER TABLE places ADD COLUMN tripadvisor_url TEXT',
+    );
+    await db.execute(
+      'ALTER TABLE places ADD COLUMN category TEXT',
+    );
+    await db.execute(
+      'ALTER TABLE places ADD COLUMN photo_url TEXT',
+    );
   }
 
   Future<void> _createDaysTable(Database db) async {
@@ -167,6 +198,21 @@ class DatabaseService {
     ''');
   }
 
+  Future<void> _addAttractionMetadataColumns(Database db) async {
+    await db.execute(
+      'ALTER TABLE attractions_suggestions ADD COLUMN score REAL',
+    );
+    await db.execute(
+      'ALTER TABLE attractions_suggestions ADD COLUMN image_url TEXT',
+    );
+    await db.execute(
+      'ALTER TABLE attractions_suggestions ADD COLUMN source_url TEXT',
+    );
+    await db.execute(
+      'ALTER TABLE attractions_suggestions ADD COLUMN category_key TEXT',
+    );
+  }
+
   Future<void> _createIndexes(Database db) async {
     await db.execute(
         'CREATE INDEX IF NOT EXISTS idx_notes_trip_id ON notes(trip_id)');
@@ -180,5 +226,7 @@ class DatabaseService {
         'CREATE INDEX IF NOT EXISTS idx_documents_trip_created ON documents(trip_id, created_at)');
     await db.execute(
         'CREATE INDEX IF NOT EXISTS idx_attractions_trip_id ON attractions_suggestions(trip_id)');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_attractions_trip_score ON attractions_suggestions(trip_id, score)');
   }
 }

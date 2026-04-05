@@ -9,8 +9,11 @@ Plan your trips, organize your spots, and keep everything accessible — even wi
 - **Trips**: Create, edit, and delete trips with dates
 - **Spots**: Manage places with coordinates and optional notes
 - **Quick Add**: Fast entry for spot, note, day, or file from one action
-- **Share Into Planora**: Share Google Maps links/text from Android apps directly into a trip
-- **Google Maps Link Parsing**: Extract coordinates and name from map links
+- **Section Tabs**: Trip details split into dedicated tabs for Places, Files, Notes, and Itinerary
+- **Share Into Planora**: Share Google Maps or Tripadvisor links/text from Android apps directly into a trip
+- **External Link Parsing**: Extract location details from Google Maps links and Tripadvisor URLs
+- **Tripadvisor Link Import**: Resolve Tripadvisor activity links into spot coordinates and auto-add a Google Maps reference link in notes
+- **Place Details**: Tap a place to view photo, category, Google Maps link, and Tripadvisor link when available
 - **Map + Routing**: OSM map with markers, estimated offline routing (foot/car), and open in Google Maps
 - **Itinerary**: Organize places by day and reorder items
 - **Documents**: Attach local files per trip and open/delete them offline
@@ -47,7 +50,9 @@ lib/
 │   ├── shared_text_intent_service.dart
 │   ├── shared_location_import_service.dart
 │   ├── shared_location_import_coordinator.dart
-│   └── google_maps_link_parser.dart
+│   ├── google_maps_link_parser.dart
+│   ├── tripadvisor_link_parser.dart
+│   └── external_location_link_import_service.dart
 └── widgets/
    ├── trip_form_dialog.dart
    ├── place_form_dialog.dart
@@ -111,6 +116,7 @@ lib/
 - **geolocator** — Device location
 - **receive_sharing_intent** — Android share-in flow
 - **url_launcher** — Open routes/places in Google Maps
+- **Tripadvisor Content API** — Optional attraction categories, ratings, and photos when built with a TripAdvisor API key
 
 ## Getting Started
 
@@ -161,7 +167,7 @@ lib/
 
 ### Practical UX Layer
 - Quick add workflow to reduce manual input
-- Link import + extraction from shared map URLs
+- Link import + extraction from shared Google Maps and Tripadvisor URLs
 - Map-based location picking and current-location autofill
 
 ## Running the App
@@ -193,17 +199,18 @@ flutter build appbundle --release
 - All trips are stored in the device's app-specific directory
 - Documents are copied and referenced by local file path
 - Dates are stored as ISO 8601 strings for consistency
+- To enable TripAdvisor-backed suggestions, build with `--dart-define=TRIPADVISOR_API_KEY=your_key_here`
 
 ## Share Into Planora (Android)
 
 You can share text/links from other apps into Planora:
 
-1. In Google Maps (or another app), tap **Share** on a location
+1. In Google Maps, Tripadvisor, or another app, tap **Share** on a location/activity
 2. Choose **Planora**
 3. Select a trip
 4. Confirm/import in the spot form
 
-This supports Google Maps link parsing and pre-fills coordinates.
+This supports Google Maps and Tripadvisor link parsing and pre-fills spot data.
 
 ## Map Setup (OpenStreetMap + Offline)
 
@@ -213,9 +220,10 @@ Planora includes a trip map screen with:
 - Offline route planning between saved points (on foot and car modes)
 - One-tap open in Google Maps for places and routes
 
-Place creation also supports Google Maps link parsing:
-- Paste a Google Maps URL in the place form
+Place creation also supports external link parsing:
+- Paste a Google Maps or Tripadvisor URL in the place form
 - Tap **Extract from link** to auto-fill coordinates (and name when available)
+- Tripadvisor imports add source details and a generated Google Maps link to the note
 - You can also use **Use current location** or **Pick on map**
 
 ### Open map

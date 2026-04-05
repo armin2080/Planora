@@ -143,6 +143,10 @@ class TripsDataSource {
     required double latitude,
     required double longitude,
     String? note,
+    String? googleMapsUrl,
+    String? tripadvisorUrl,
+    String? category,
+    String? photoUrl,
   }) async {
     final db = await _db;
     await db.insert('places', {
@@ -151,6 +155,10 @@ class TripsDataSource {
       'lat': latitude,
       'lng': longitude,
       'note': note,
+      'google_maps_url': googleMapsUrl,
+      'tripadvisor_url': tripadvisorUrl,
+      'category': category,
+      'photo_url': photoUrl,
       'created_at': DateTime.now().toIso8601String(),
     });
   }
@@ -161,6 +169,10 @@ class TripsDataSource {
     required double latitude,
     required double longitude,
     String? note,
+    String? googleMapsUrl,
+    String? tripadvisorUrl,
+    String? category,
+    String? photoUrl,
   }) async {
     final db = await _db;
     await db.update(
@@ -170,6 +182,10 @@ class TripsDataSource {
         'lat': latitude,
         'lng': longitude,
         'note': note,
+        'google_maps_url': googleMapsUrl,
+        'tripadvisor_url': tripadvisorUrl,
+        'category': category,
+        'photo_url': photoUrl,
       },
       where: 'id = ?',
       whereArgs: [placeId],
@@ -422,11 +438,26 @@ class TripsDataSource {
       'attractions_suggestions',
       where: 'trip_id = ?',
       whereArgs: [tripId],
-      orderBy: 'id ASC',
+      orderBy: 'COALESCE(score, 0) DESC, id ASC',
     );
 
     return rows
         .map((row) => AttractionSuggestion.fromMap(row))
         .toList(growable: false);
+  }
+
+  Future<bool> hasAttractionSuggestions(int tripId) async {
+    final db = await _db;
+    final rows = await db.rawQuery(
+      'SELECT COUNT(*) AS count FROM attractions_suggestions WHERE trip_id = ?',
+      [tripId],
+    );
+
+    final countValue = rows.first['count'];
+    final count = countValue is int
+        ? countValue
+        : int.tryParse(countValue.toString()) ?? 0;
+
+    return count > 0;
   }
 }

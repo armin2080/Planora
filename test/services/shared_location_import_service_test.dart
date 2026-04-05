@@ -24,4 +24,16 @@ void main() {
     const shortLink = 'https://maps.app.goo.gl/AbCdEf12345';
     expect(service.canImportLocation(shortLink), isTrue);
   });
+
+  test('returns true for a Tripadvisor attraction link', () {
+    const link =
+        'https://www.tripadvisor.com/Attraction_Review-g187147-d188151-Reviews-Eiffel_Tower-Paris_Ile_de_France.html';
+    expect(service.canImportLocation(link), isTrue);
+  });
+
+  test('returns true when Tripadvisor link appears inside shared text', () {
+    const sharedText =
+        'Check this out: https://www.tripadvisor.com/Attraction_Review-g60763-d105127-Reviews-The_Metropolitan_Museum_of_Art-New_York_City_New_York.html';
+    expect(service.canImportLocation(sharedText), isTrue);
+  });
 }

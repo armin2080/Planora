@@ -8,6 +8,7 @@ import '../models/trip.dart';
 import '../models/itinerary_item.dart';
 import '../models/trip_document.dart';
 import '../models/trip_note.dart';
+import 'attractions_service.dart';
 import 'document_storage_service.dart';
 import 'trips_repository.dart';
 
@@ -16,13 +17,16 @@ class TripDetailsController extends ChangeNotifier {
     required this.trip,
     TripsRepository? repository,
     DocumentStorageService? documentStorageService,
+    AttractionsService? attractionsService,
   })  : _repository = repository ?? TripsRepository(),
         _documentStorageService =
-            documentStorageService ?? DocumentStorageService();
+            documentStorageService ?? DocumentStorageService(),
+        _attractionsService = attractionsService ?? AttractionsService();
 
   Trip trip;
   final TripsRepository _repository;
   final DocumentStorageService _documentStorageService;
+  final AttractionsService _attractionsService;
 
   bool isLoadingNotes = false;
   bool isLoadingPlaces = false;
@@ -137,6 +141,24 @@ class TripDetailsController extends ChangeNotifier {
     }
   }
 
+  Future<void> refreshAttractionsFromApi() async {
+    isLoadingAttractions = true;
+    notifyListeners();
+
+    try {
+      final fetched =
+          await _attractionsService.fetchAttractions(trip.name, trip.id);
+      await _repository.replaceAttractionSuggestions(
+        tripId: trip.id,
+        suggestions: fetched,
+      );
+      attractions = fetched;
+    } finally {
+      isLoadingAttractions = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> loadDocuments() async {
     isLoadingDocuments = true;
     notifyListeners();
@@ -187,6 +209,10 @@ class TripDetailsController extends ChangeNotifier {
     required double latitude,
     required double longitude,
     String? note,
+    String? googleMapsUrl,
+    String? tripadvisorUrl,
+    String? category,
+    String? photoUrl,
   }) async {
     await _repository.addPlace(
       tripId: trip.id,
@@ -194,6 +220,10 @@ class TripDetailsController extends ChangeNotifier {
       latitude: latitude,
       longitude: longitude,
       note: note,
+      googleMapsUrl: googleMapsUrl,
+      tripadvisorUrl: tripadvisorUrl,
+      category: category,
+      photoUrl: photoUrl,
     );
     await loadPlaces();
   }
@@ -204,6 +234,10 @@ class TripDetailsController extends ChangeNotifier {
     required double latitude,
     required double longitude,
     String? note,
+    String? googleMapsUrl,
+    String? tripadvisorUrl,
+    String? category,
+    String? photoUrl,
   }) async {
     await _repository.updatePlace(
       placeId: placeId,
@@ -211,6 +245,10 @@ class TripDetailsController extends ChangeNotifier {
       latitude: latitude,
       longitude: longitude,
       note: note,
+      googleMapsUrl: googleMapsUrl,
+      tripadvisorUrl: tripadvisorUrl,
+      category: category,
+      photoUrl: photoUrl,
     );
     await loadPlaces();
   }

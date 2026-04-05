@@ -19,6 +19,7 @@ class SharedLocationImportCoordinator {
   Future<SharedLocationImportResult> importFromSharedText(
     BuildContext context, {
     required String? sharedText,
+    String? contextHint,
     required Future<void> Function(PlaceFormData placeData) onImported,
   }) async {
     final normalized = sharedText?.trim();
@@ -34,6 +35,7 @@ class SharedLocationImportCoordinator {
       context,
       title: 'Import shared location',
       initialGoogleMapsLink: normalized,
+      contextHint: contextHint,
     );
 
     if (placeData == null) {

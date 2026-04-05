@@ -6,6 +6,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../models/place.dart';
 import '../screens/location_picker_screen.dart';
+import '../services/external_location_link_import_service.dart';
 import '../services/google_maps_link_parser.dart';
 
 class PlaceFormData {
@@ -14,12 +15,20 @@ class PlaceFormData {
     required this.latitude,
     required this.longitude,
     required this.note,
+    this.googleMapsUrl,
+    this.tripadvisorUrl,
+    this.category,
+    this.photoUrl,
   });
 
   final String name;
   final double latitude;
   final double longitude;
   final String? note;
+  final String? googleMapsUrl;
+  final String? tripadvisorUrl;
+  final String? category;
+  final String? photoUrl;
 }
 
 class PlaceFormDialog extends StatefulWidget {
@@ -28,17 +37,20 @@ class PlaceFormDialog extends StatefulWidget {
     required this.title,
     this.initialPlace,
     this.initialGoogleMapsLink,
+    this.contextHint,
   });
 
   final String title;
   final Place? initialPlace;
   final String? initialGoogleMapsLink;
+  final String? contextHint;
 
   static Future<PlaceFormData?> show(
     BuildContext context, {
     required String title,
     Place? initialPlace,
     String? initialGoogleMapsLink,
+    String? contextHint,
   }) {
     return showDialog<PlaceFormData>(
       context: context,
@@ -46,6 +58,7 @@ class PlaceFormDialog extends StatefulWidget {
         title: title,
         initialPlace: initialPlace,
         initialGoogleMapsLink: initialGoogleMapsLink,
+        contextHint: contextHint,
       ),
     );
   }
@@ -61,6 +74,12 @@ class _PlaceFormDialogState extends State<PlaceFormDialog> {
   late final TextEditingController _longitudeController;
   late final TextEditingController _noteController;
   final _formKey = GlobalKey<FormState>();
+  final ExternalLocationLinkImportService _externalImportService =
+      ExternalLocationLinkImportService();
+  String? _importGoogleMapsUrl;
+  String? _importTripadvisorUrl;
+  String? _importCategory;
+  String? _importPhotoUrl;
 
   @override
   void initState() {
@@ -75,6 +94,10 @@ class _PlaceFormDialogState extends State<PlaceFormDialog> {
         text: widget.initialPlace?.longitude.toString() ?? '');
     _noteController =
         TextEditingController(text: widget.initialPlace?.note ?? '');
+    _importGoogleMapsUrl = widget.initialPlace?.googleMapsUrl;
+    _importTripadvisorUrl = widget.initialPlace?.tripadvisorUrl;
+    _importCategory = widget.initialPlace?.category;
+    _importPhotoUrl = widget.initialPlace?.photoUrl;
 
     if ((widget.initialGoogleMapsLink ?? '').trim().isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -156,33 +179,91 @@ class _PlaceFormDialogState extends State<PlaceFormDialog> {
   }
 
   Future<void> _extractFromGoogleMapsLink() async {
-    final parsed = await _parseGoogleMapsInput(_googleMapsLinkController.text);
+    final parsed =
+        await _externalImportService.parseAndResolve(
+      _googleMapsLinkController.text,
+      contextHint: widget.contextHint,
+    );
+
     if (!mounted) {
       return;
     }
 
     if (parsed == null) {
+      final fallback =
+          await _parseGoogleMapsInput(_googleMapsLinkController.text);
+      if (!mounted) {
+        return;
+      }
+
+      if (fallback == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not extract location from this link.',
+            ),
+          ),
+        );
+        return;
+      }
+
+      setState(() {
+        _latitudeController.text = fallback.latitude.toStringAsFixed(6);
+        _longitudeController.text = fallback.longitude.toStringAsFixed(6);
+        _importGoogleMapsUrl =
+            'https://www.google.com/maps/search/?api=1&query=${fallback.latitude},${fallback.longitude}';
+        _importTripadvisorUrl = null;
+        _importCategory = null;
+        if (_nameController.text.trim().isEmpty &&
+            fallback.name != null &&
+            fallback.name!.trim().isNotEmpty) {
+          _nameController.text = fallback.name!.trim();
+        }
+      });
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text(
-                'Could not extract coordinates from this Google Maps link.')),
+          content: Text('Coordinates extracted from Google Maps link.'),
+        ),
       );
+      return;
+    }
+
+    if (!mounted) {
       return;
     }
 
     setState(() {
       _latitudeController.text = parsed.latitude.toStringAsFixed(6);
       _longitudeController.text = parsed.longitude.toStringAsFixed(6);
-      if (_nameController.text.trim().isEmpty &&
-          parsed.name != null &&
-          parsed.name!.trim().isNotEmpty) {
-        _nameController.text = parsed.name!.trim();
+      _importGoogleMapsUrl = parsed.googleMapsUrl;
+      _importTripadvisorUrl = parsed.source == 'Tripadvisor'
+          ? parsed.sourceUrl
+          : null;
+      _importCategory = parsed.category ?? _importCategory;
+      _importPhotoUrl = parsed.photoUrl ?? _importPhotoUrl;
+      if (_nameController.text.trim().isEmpty) {
+        _nameController.text = parsed.name;
+      }
+
+      final importNote = parsed.note?.trim();
+      if (importNote != null && importNote.isNotEmpty) {
+        if (_noteController.text.trim().isEmpty) {
+          _noteController.text = importNote;
+        } else if (!_noteController.text.contains(importNote)) {
+          _noteController.text = '${_noteController.text.trim()}\n\n$importNote';
+        }
       }
     });
 
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-          content: Text('Coordinates extracted from Google Maps link.')),
+      SnackBar(
+        content: Text(
+          parsed.resolutionHint != null && parsed.resolutionHint!.isNotEmpty
+              ? 'Imported from ${parsed.source ?? 'link'} (${parsed.resolutionHint!}).'
+              : 'Imported from ${parsed.source ?? 'link'} and generated Google Maps link.',
+        ),
+      ),
     );
   }
 
@@ -202,28 +283,72 @@ class _PlaceFormDialogState extends State<PlaceFormDialog> {
       return;
     }
 
-    final parsed = await _parseGoogleMapsInput(link);
+    final parsed = await _externalImportService.parseAndResolve(
+      link,
+      contextHint: widget.contextHint,
+    );
+
     if (!mounted) {
       return;
     }
 
-    if (parsed == null) {
+    if (parsed != null) {
+      setState(() {
+        if (needsLatitude) {
+          _latitudeController.text = parsed.latitude.toStringAsFixed(6);
+        }
+        if (needsLongitude) {
+          _longitudeController.text = parsed.longitude.toStringAsFixed(6);
+        }
+        if (needsName) {
+          _nameController.text = parsed.name;
+        }
+        _importGoogleMapsUrl = parsed.googleMapsUrl;
+        _importTripadvisorUrl = parsed.source == 'Tripadvisor'
+            ? parsed.sourceUrl
+          : null;
+        _importCategory = parsed.category ?? _importCategory;
+        _importPhotoUrl = parsed.photoUrl ?? _importPhotoUrl;
+
+        final importNote = parsed.note?.trim();
+        if (importNote != null && importNote.isNotEmpty) {
+          if (_noteController.text.trim().isEmpty) {
+            _noteController.text = importNote;
+          } else if (!_noteController.text.contains(importNote)) {
+            _noteController.text =
+                '${_noteController.text.trim()}\n\n$importNote';
+          }
+        }
+      });
+      return;
+    }
+
+    final fallback = await _parseGoogleMapsInput(link);
+    if (!mounted) {
+      return;
+    }
+
+    if (fallback == null) {
       return;
     }
 
     setState(() {
       if (needsLatitude) {
-        _latitudeController.text = parsed.latitude.toStringAsFixed(6);
+        _latitudeController.text = fallback.latitude.toStringAsFixed(6);
       }
       if (needsLongitude) {
-        _longitudeController.text = parsed.longitude.toStringAsFixed(6);
+        _longitudeController.text = fallback.longitude.toStringAsFixed(6);
       }
       if (needsName) {
-        final parsedName = parsed.name?.trim();
+        final parsedName = fallback.name?.trim();
         _nameController.text = (parsedName != null && parsedName.isNotEmpty)
             ? parsedName
             : 'Pinned place';
       }
+      _importGoogleMapsUrl =
+          'https://www.google.com/maps/search/?api=1&query=${fallback.latitude},${fallback.longitude}';
+      _importTripadvisorUrl = null;
+      _importCategory = null;
     });
   }
 
@@ -246,6 +371,10 @@ class _PlaceFormDialogState extends State<PlaceFormDialog> {
         note: _noteController.text.trim().isEmpty
             ? null
             : _noteController.text.trim(),
+        googleMapsUrl: _importGoogleMapsUrl,
+        tripadvisorUrl: _importTripadvisorUrl,
+        category: _importCategory,
+        photoUrl: _importPhotoUrl,
       ),
     );
   }
@@ -325,8 +454,8 @@ class _PlaceFormDialogState extends State<PlaceFormDialog> {
               TextFormField(
                 controller: _googleMapsLinkController,
                 decoration: const InputDecoration(
-                  labelText: 'Google Maps link (optional)',
-                  hintText: 'https://maps.google.com/...',
+                  labelText: 'Maps or Tripadvisor link (optional)',
+                  hintText: 'https://maps.google.com/... or tripadvisor link',
                 ),
               ),
               const SizedBox(height: 8),

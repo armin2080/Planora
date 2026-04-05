@@ -79,6 +79,10 @@ class TripsRepository {
     required double latitude,
     required double longitude,
     String? note,
+    String? googleMapsUrl,
+    String? tripadvisorUrl,
+    String? category,
+    String? photoUrl,
   }) {
     return _dataSource.addPlace(
       tripId: tripId,
@@ -86,6 +90,10 @@ class TripsRepository {
       latitude: latitude,
       longitude: longitude,
       note: note,
+      googleMapsUrl: googleMapsUrl,
+      tripadvisorUrl: tripadvisorUrl,
+      category: category,
+      photoUrl: photoUrl,
     );
   }
 
@@ -95,6 +103,10 @@ class TripsRepository {
     required double latitude,
     required double longitude,
     String? note,
+    String? googleMapsUrl,
+    String? tripadvisorUrl,
+    String? category,
+    String? photoUrl,
   }) {
     return _dataSource.updatePlace(
       placeId: placeId,
@@ -102,6 +114,10 @@ class TripsRepository {
       latitude: latitude,
       longitude: longitude,
       note: note,
+      googleMapsUrl: googleMapsUrl,
+      tripadvisorUrl: tripadvisorUrl,
+      category: category,
+      photoUrl: photoUrl,
     );
   }
 
@@ -192,5 +208,9 @@ class TripsRepository {
 
   Future<List<AttractionSuggestion>> listAttractionSuggestions(int tripId) {
     return _dataSource.listAttractionSuggestions(tripId);
+  }
+
+  Future<bool> hasAttractionSuggestions(int tripId) {
+    return _dataSource.hasAttractionSuggestions(tripId);
   }
 }

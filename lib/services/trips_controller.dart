@@ -2,13 +2,16 @@ import 'package:flutter/foundation.dart';
 
 import '../models/trip.dart';
 import 'trips_repository.dart';
+import 'trip_photo_lookup_service.dart';
 
 /// Controller for managing trips list state and business logic
 class TripsController extends ChangeNotifier {
-  TripsController({TripsRepository? repository})
-      : _repository = repository ?? TripsRepository();
+  TripsController({TripsRepository? repository, TripPhotoLookupService? photoService})
+      : _repository = repository ?? TripsRepository(),
+        _photoService = photoService ?? TripPhotoLookupService();
 
   final TripsRepository _repository;
+  final TripPhotoLookupService _photoService;
 
   bool isLoading = false;
   String? error;
@@ -35,11 +38,15 @@ class TripsController extends ChangeNotifier {
     required DateTime endDate,
     String? coverPhotoPath,
   }) async {
+    // If no photo is provided, try to auto-fetch one
+    final photoPath = coverPhotoPath ??
+        await _photoService.findAndDownloadPhotoUrl(tripName: name);
+
     final createdTripId = await _repository.createTrip(
       name: name,
       startDate: startDate,
       endDate: endDate,
-      coverPhotoPath: coverPhotoPath,
+      coverPhotoPath: photoPath,
     );
     await loadTrips();
     return createdTripId;

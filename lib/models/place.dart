@@ -6,6 +6,10 @@ class Place {
     required this.latitude,
     required this.longitude,
     required this.note,
+    this.googleMapsUrl,
+    this.tripadvisorUrl,
+    this.category,
+    this.photoUrl,
     required this.createdAt,
   });
 
@@ -15,6 +19,10 @@ class Place {
   final double latitude;
   final double longitude;
   final String? note;
+  final String? googleMapsUrl;
+  final String? tripadvisorUrl;
+  final String? category;
+  final String? photoUrl;
   final DateTime createdAt;
 
   Place copyWith({
@@ -22,6 +30,10 @@ class Place {
     double? latitude,
     double? longitude,
     String? note,
+    String? googleMapsUrl,
+    String? tripadvisorUrl,
+    String? category,
+    String? photoUrl,
   }) {
     return Place(
       id: id,
@@ -30,6 +42,10 @@ class Place {
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       note: note ?? this.note,
+      googleMapsUrl: googleMapsUrl ?? this.googleMapsUrl,
+      tripadvisorUrl: tripadvisorUrl ?? this.tripadvisorUrl,
+      category: category ?? this.category,
+      photoUrl: photoUrl ?? this.photoUrl,
       createdAt: createdAt,
     );
   }
@@ -42,6 +58,10 @@ class Place {
       'lat': latitude,
       'lng': longitude,
       'note': note,
+      'google_maps_url': googleMapsUrl,
+      'tripadvisor_url': tripadvisorUrl,
+      'category': category,
+      'photo_url': photoUrl,
       'created_at': createdAt.toIso8601String(),
     };
   }
@@ -54,6 +74,10 @@ class Place {
       latitude: (map['lat'] as num).toDouble(),
       longitude: (map['lng'] as num).toDouble(),
       note: map['note'] as String?,
+      googleMapsUrl: map['google_maps_url'] as String?,
+      tripadvisorUrl: map['tripadvisor_url'] as String?,
+      category: map['category'] as String?,
+      photoUrl: map['photo_url'] as String?,
       createdAt: DateTime.parse(map['created_at'] as String),
     );
   }

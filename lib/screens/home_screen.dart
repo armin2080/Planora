@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -36,23 +37,85 @@ class _HomeScreenState extends State<HomeScreen> {
   final TripsRepository _tripsRepository = TripsRepository();
   final DateFormat _dateFormat = DateFormat('MMM d, yyyy');
   StreamSubscription<String>? _sharedTextSubscription;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   String? _lastHandledSharedText;
   String _activeFilter = 'all';
+  bool _isBackfillingAttractions = false;
 
   @override
   void initState() {
     super.initState();
     _controller.addListener(_onControllerChanged);
-    _controller.loadTrips();
+    _controller.loadTrips().then((_) => _backfillMissingAttractionsForTrips());
     _listenForSharedText();
+    _listenForConnectivityBackfill();
   }
 
   @override
   void dispose() {
     _sharedTextSubscription?.cancel();
+    _connectivitySubscription?.cancel();
     _controller.removeListener(_onControllerChanged);
     _controller.dispose();
     super.dispose();
+  }
+
+  void _listenForConnectivityBackfill() {
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen(
+      (results) {
+        final hasInternet = !results.contains(ConnectivityResult.none);
+        if (!hasInternet) {
+          return;
+        }
+
+        _backfillMissingAttractionsForTrips();
+      },
+    );
+  }
+
+  Future<void> _backfillMissingAttractionsForTrips() async {
+    if (_isBackfillingAttractions) {
+      return;
+    }
+
+    _isBackfillingAttractions = true;
+
+    try {
+      final isOnline = await _attractionsService.hasInternetConnection();
+      if (!isOnline) {
+        return;
+      }
+
+      await _controller.loadTrips();
+      final allTrips = List<Trip>.from(_controller.trips);
+
+      for (final trip in allTrips) {
+        final hasSuggestions =
+            await _tripsRepository.hasAttractionSuggestions(trip.id);
+        if (hasSuggestions) {
+          continue;
+        }
+
+        developer.log(
+          '[HomeScreen] Backfilling attractions for trip ${trip.id} (${trip.name})',
+        );
+
+        final attractions =
+            await _attractionsService.fetchAttractions(trip.name, trip.id);
+        if (attractions.isEmpty) {
+          continue;
+        }
+
+        await _tripsRepository.replaceAttractionSuggestions(
+          tripId: trip.id,
+          suggestions: attractions,
+        );
+      }
+    } catch (e) {
+      developer.log('[HomeScreen] Backfill attractions error: $e');
+    } finally {
+      _isBackfillingAttractions = false;
+    }
   }
 
   void _listenForSharedText() {

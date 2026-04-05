@@ -1,4 +1,5 @@
 import 'google_maps_link_parser.dart';
+import 'tripadvisor_link_parser.dart';
 
 class SharedLocationImportService {
   const SharedLocationImportService();
@@ -10,6 +11,10 @@ class SharedLocationImportService {
     }
 
     if (GoogleMapsLinkParser.parse(normalized) != null) {
+      return true;
+    }
+
+    if (TripadvisorLinkParser.parse(normalized) != null) {
       return true;
     }
 
@@ -28,7 +33,8 @@ class SharedLocationImportService {
       if (host.contains('google.') ||
           host.contains('maps.app.goo.gl') ||
           host == 'goo.gl' ||
-          host.endsWith('.goo.gl')) {
+          host.endsWith('.goo.gl') ||
+          host.contains('tripadvisor.')) {
         return true;
       }
     }

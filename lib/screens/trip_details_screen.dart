@@ -6,6 +6,7 @@ import '../models/day.dart';
 import '../models/place.dart';
 import '../models/trip_document.dart';
 import '../models/trip.dart';
+import '../services/place_photo_lookup_service.dart';
 import '../services/shared_location_import_coordinator.dart';
 import '../services/shared_location_import_service.dart';
 import '../services/trip_details_controller.dart';
@@ -37,7 +38,11 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
       const SharedLocationImportService();
   late final SharedLocationImportCoordinator _sharedLocationImportCoordinator;
   final DateFormat _dateFormat = DateFormat('MMM d, yyyy');
+  final PlacePhotoLookupService _placePhotoLookupService =
+      PlacePhotoLookupService();
+  final Map<int, String?> _placePhotoCache = <int, String?>{};
   bool _handledInitialSharedText = false;
+  int _selectedRootTabIndex = 0;
 
   @override
   void initState() {
@@ -139,6 +144,7 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
     final result = await PlaceFormDialog.show(
       context,
       title: 'Add spot',
+      contextHint: _trip.name,
     );
 
     if (result == null) {
@@ -150,6 +156,10 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
       latitude: result.latitude,
       longitude: result.longitude,
       note: result.note,
+      googleMapsUrl: result.googleMapsUrl,
+      tripadvisorUrl: result.tripadvisorUrl,
+      category: result.category,
+      photoUrl: result.photoUrl,
     );
   }
 
@@ -167,11 +177,16 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
     final result = await _sharedLocationImportCoordinator.importFromSharedText(
       context,
       sharedText: sharedText,
+      contextHint: _trip.name,
       onImported: (placeData) => _controller.addPlace(
         name: placeData.name,
         latitude: placeData.latitude,
         longitude: placeData.longitude,
         note: placeData.note,
+        googleMapsUrl: placeData.googleMapsUrl,
+        tripadvisorUrl: placeData.tripadvisorUrl,
+        category: placeData.category,
+        photoUrl: placeData.photoUrl,
       ),
     );
 
@@ -215,6 +230,7 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
       context,
       title: 'Edit spot',
       initialPlace: place,
+      contextHint: _trip.name,
     );
 
     if (result == null) {
@@ -227,6 +243,10 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
       latitude: result.latitude,
       longitude: result.longitude,
       note: result.note,
+      googleMapsUrl: result.googleMapsUrl,
+      tripadvisorUrl: result.tripadvisorUrl,
+      category: result.category,
+      photoUrl: result.photoUrl,
     );
   }
 
@@ -235,10 +255,164 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
   }
 
   Future<void> _openPlaceInGoogleMaps(Place place) async {
-    final uri = Uri.parse(
-      'https://www.google.com/maps/search/?api=1&query=${place.latitude},${place.longitude}',
-    );
+    final fallbackGoogleUrl = _extractLabeledUrl(place.note, 'Google Maps:');
+    final uri = Uri.parse(place.googleMapsUrl ??
+        fallbackGoogleUrl ??
+        'https://www.google.com/maps/search/?api=1&query=${place.latitude},${place.longitude}');
     await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  String? _extractLabeledUrl(String? note, String label) {
+    if (note == null || note.trim().isEmpty) {
+      return null;
+    }
+
+    for (final line in note.split('\n')) {
+      if (!line.toLowerCase().startsWith(label.toLowerCase())) {
+        continue;
+      }
+      final value = line.substring(label.length).trim();
+      if (value.startsWith('http://') || value.startsWith('https://')) {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  String? _extractLabeledValue(String? note, String label) {
+    if (note == null || note.trim().isEmpty) {
+      return null;
+    }
+
+    for (final line in note.split('\n')) {
+      if (!line.toLowerCase().startsWith(label.toLowerCase())) {
+        continue;
+      }
+      final value = line.substring(label.length).trim();
+      if (value.isNotEmpty) {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  Future<String?> _resolvePlacePhotoUrl(Place place) async {
+    final existing = _placePhotoCache[place.id];
+    if (existing != null) {
+      return existing;
+    }
+
+    if (place.photoUrl != null && place.photoUrl!.trim().isNotEmpty) {
+      _placePhotoCache[place.id] = place.photoUrl;
+      return place.photoUrl;
+    }
+
+    final photo = await _placePhotoLookupService.findPhotoUrl(
+      placeName: place.name,
+      contextHint: _trip.name,
+    );
+    _placePhotoCache[place.id] = photo;
+    return photo;
+  }
+
+  Future<void> _showPlaceDetails(Place place) async {
+    final effectiveGoogleUrl = place.googleMapsUrl ??
+      _extractLabeledUrl(place.note, 'Google Maps:') ??
+        'https://www.google.com/maps/search/?api=1&query=${place.latitude},${place.longitude}';
+    final effectiveTripadvisorUrl =
+      place.tripadvisorUrl ?? _extractLabeledUrl(place.note, 'Source:');
+    final effectiveCategory =
+      place.category ?? _extractLabeledValue(place.note, 'Category:');
+    final effectivePhotoUrl = await _resolvePlacePhotoUrl(place);
+
+    if (!mounted) {
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (effectivePhotoUrl != null && effectivePhotoUrl.isNotEmpty)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 200,
+                      child: Image.network(
+                        effectivePhotoUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest,
+                          alignment: Alignment.center,
+                          child: const Icon(Icons.broken_image_outlined),
+                        ),
+                      ),
+                    ),
+                  ),
+                if (effectivePhotoUrl != null && effectivePhotoUrl.isNotEmpty)
+                  const SizedBox(height: 14),
+                Text(
+                  place.name,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '${place.latitude.toStringAsFixed(6)}, ${place.longitude.toStringAsFixed(6)}',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                if (effectiveCategory != null &&
+                    effectiveCategory.trim().isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Chip(
+                      label: Text(effectiveCategory.trim()),
+                    ),
+                  ),
+                if (place.note != null && place.note!.trim().isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 14),
+                    child: Text(place.note!.trim()),
+                  ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: () => launchUrl(
+                        Uri.parse(effectiveGoogleUrl),
+                        mode: LaunchMode.externalApplication,
+                      ),
+                      icon: const Icon(Icons.map_outlined),
+                      label: const Text('Google Maps'),
+                    ),
+                    if (effectiveTripadvisorUrl != null &&
+                        effectiveTripadvisorUrl.trim().isNotEmpty)
+                      OutlinedButton.icon(
+                        onPressed: () => launchUrl(
+                          Uri.parse(effectiveTripadvisorUrl),
+                          mode: LaunchMode.externalApplication,
+                        ),
+                        icon: const Icon(Icons.travel_explore),
+                        label: const Text('Tripadvisor'),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _createDay() async {
@@ -343,7 +517,7 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
     await _controller.deleteDocument(document);
   }
 
-  Widget _buildOverviewTab() {
+  Widget _buildPlacesTab() {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 132),
       children: [
@@ -352,6 +526,24 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
           dateFormat: _dateFormat,
         ),
         const SizedBox(height: 12),
+        PlacesSection(
+          isLoading: _controller.isLoadingPlaces,
+          places: _controller.places,
+          onAdd: _addPlace,
+          onTapPlace: _showPlaceDetails,
+          resolvePhotoUrl: _resolvePlacePhotoUrl,
+          onOpenInGoogleMaps: _openPlaceInGoogleMaps,
+          onEdit: _editPlace,
+          onDelete: _deletePlace,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFilesTab() {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 132),
+      children: [
         DocumentsSection(
           isLoading: _controller.isLoadingDocuments,
           documents: _controller.documents,
@@ -360,26 +552,14 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
           onOpen: _openDocument,
           onDelete: _deleteDocument,
         ),
-        const SizedBox(height: 12),
-        PlacesSection(
-          isLoading: _controller.isLoadingPlaces,
-          places: _controller.places,
-          onAdd: _addPlace,
-          onOpenInGoogleMaps: _openPlaceInGoogleMaps,
-          onEdit: _editPlace,
-          onDelete: _deletePlace,
-        ),
-        const SizedBox(height: 12),
-        ItinerarySection(
-          isLoading: _controller.isLoadingPlan,
-          days: _controller.days,
-          dayItems: _controller.dayItems,
-          onCreateDay: _createDay,
-          onAddPlaceToDay: _addPlaceToDay,
-          onMoveUp: _controller.moveItemUp,
-          onMoveDown: _controller.moveItemDown,
-        ),
-        const SizedBox(height: 12),
+      ],
+    );
+  }
+
+  Widget _buildNotesTab() {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 132),
+      children: [
         NotesSection(
           isLoading: _controller.isLoadingNotes,
           notes: _controller.notes,
@@ -392,13 +572,18 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
     );
   }
 
-  Widget _buildThingsToDoTab() {
+  Widget _buildItineraryTab() {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 132),
       children: [
-        AttractionSuggestionsSection(
-          isLoading: _controller.isLoadingAttractions,
-          attractions: _controller.attractions,
+        ItinerarySection(
+          isLoading: _controller.isLoadingPlan,
+          days: _controller.days,
+          dayItems: _controller.dayItems,
+          onCreateDay: _createDay,
+          onAddPlaceToDay: _addPlaceToDay,
+          onMoveUp: _controller.moveItemUp,
+          onMoveDown: _controller.moveItemDown,
         ),
       ],
     );
@@ -407,7 +592,7 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
           title: Text(_trip.name),
@@ -439,27 +624,33 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
           ],
           bottom: TabBar(
             onTap: (index) {
-              if (index == 1) {
-                _controller.loadAttractions();
-              }
+              setState(() {
+                _selectedRootTabIndex = index;
+              });
             },
             tabs: const [
-              Tab(text: 'Overview', icon: Icon(Icons.dashboard_outlined)),
-              Tab(text: 'Things to Do', icon: Icon(Icons.travel_explore)),
+              Tab(text: 'Places', icon: Icon(Icons.place_outlined)),
+              Tab(text: 'Files', icon: Icon(Icons.attach_file)),
+              Tab(text: 'Notes', icon: Icon(Icons.sticky_note_2_outlined)),
+              Tab(text: 'Itinerary', icon: Icon(Icons.view_timeline_outlined)),
             ],
           ),
         ),
         body: TabBarView(
           children: [
-            _buildOverviewTab(),
-            _buildThingsToDoTab(),
+            _buildPlacesTab(),
+            _buildFilesTab(),
+            _buildNotesTab(),
+            _buildItineraryTab(),
           ],
         ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: _showQuickAdd,
-          icon: const Icon(Icons.bolt_outlined),
-          label: const Text('Quick add'),
-        ),
+        floatingActionButton: _selectedRootTabIndex != 3
+            ? FloatingActionButton.extended(
+                onPressed: _showQuickAdd,
+                icon: const Icon(Icons.bolt_outlined),
+                label: const Text('Quick add'),
+              )
+            : null,
       ),
     );
   }
